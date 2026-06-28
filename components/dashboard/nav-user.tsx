@@ -3,7 +3,6 @@
 import {
   Bell,
   CircleUser,
-  CreditCard,
   LogOut,
   MoreVertical,
 } from "lucide-react";

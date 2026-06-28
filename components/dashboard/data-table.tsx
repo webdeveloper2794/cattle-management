@@ -1,47 +1,49 @@
 "use client";
 
 import * as React from "react";
-
+import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  CircleCheck,
+  ClipboardList,
   Columns3,
-  Loader,
-  MoreVertical,
+  HeartPulse,
+  Palette,
   Plus,
-  TrendingUp,
+  Scale,
+  Trash2,
+  Weight,
 } from "lucide-react";
 import {
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type ColumnFiltersState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { toast } from "sonner";
-import { z } from "zod";
 
-import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Drawer,
@@ -57,8 +59,6 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -70,7 +70,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -79,19 +78,648 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FormDialog } from "@/components/form/form-dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { AppState } from "@/components/shared/app-state";
 
-export const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-});
+export type CattleTableRow = {
+  id: string;
+  identificationNumber: string;
+  name: string | null;
+  breed: string;
+  gender: "Male" | "Female";
+  purpose: "Breeding" | "Dairy" | "Meat";
+  dateOfBirth: string;
+  currentStatus: "Active" | "Sold" | "Deceased" | "Transferred";
+  healthStatus: "Healthy" | "Sick" | "Recovering" | "NeedsCheckup";
+  notes: string | null;
+  color: string | null;
+  weightRecords: {
+    id: string;
+    measuredAt: string;
+    weightKg: number;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+};
 
-const columns: ColumnDef<z.infer<typeof schema>>[] = [
+const columnLabels: Record<string, string> = {
+  identificationNumber: "ID Number",
+  name: "Name",
+  breed: "Breed",
+  gender: "Gender",
+  purpose: "Purpose",
+  dateOfBirth: "Birth Date",
+  currentStatus: "Status",
+  healthStatus: "Health",
+  color: "Color",
+};
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function displayEnum(value: string) {
+  return value === "NeedsCheckup" ? "Needs Checkup" : value;
+}
+
+function getAge(value: string) {
+  const birthDate = new Date(value);
+  const today = new Date();
+  let years = today.getFullYear() - birthDate.getFullYear();
+  const monthDelta = today.getMonth() - birthDate.getMonth();
+
+  if (
+    monthDelta < 0 ||
+    (monthDelta === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    years -= 1;
+  }
+
+  if (years > 0) {
+    return `${years} yr`;
+  }
+
+  const months = Math.max(
+    0,
+    today.getMonth() -
+      birthDate.getMonth() +
+      12 * (today.getFullYear() - birthDate.getFullYear()),
+  );
+
+  return `${months} mo`;
+}
+
+function statusVariant(status: CattleTableRow["currentStatus"]) {
+  if (status === "Active") {
+    return "default";
+  }
+
+  if (status === "Sold" || status === "Transferred") {
+    return "secondary";
+  }
+
+  return "destructive";
+}
+
+function healthVariant(health: CattleTableRow["healthStatus"]) {
+  if (health === "Healthy") {
+    return "default";
+  }
+
+  if (health === "Recovering") {
+    return "secondary";
+  }
+
+  return "destructive";
+}
+
+function getLatestWeight(cattle: CattleTableRow) {
+  return cattle.weightRecords[0] ?? null;
+}
+
+function getWeightDelta(cattle: CattleTableRow) {
+  const latest = cattle.weightRecords[0];
+  const previous = cattle.weightRecords[1];
+
+  if (!latest || !previous) {
+    return null;
+  }
+
+  return latest.weightKg - previous.weightKg;
+}
+
+function todayInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function CattleDetailMetric({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  detail?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border bg-background p-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <div className="text-base font-semibold">{value}</div>
+      {detail ? (
+        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-3 rounded-md border bg-background p-4">
+      <div className="grid gap-0.5">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description ? (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-1">
+      <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">
+        {label}
+      </div>
+      <div className="min-w-0 text-sm text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function WeightHistory({
+  cattle,
+  onDelete,
+  deletingId,
+}: {
+  cattle: CattleTableRow;
+  onDelete: (recordId: string) => void;
+  deletingId: string | null;
+}) {
+  if (cattle.weightRecords.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+        No weight records yet.
+      </div>
+    );
+  }
+
+  const maxWeight = Math.max(
+    ...cattle.weightRecords.map((record) => record.weightKg),
+  );
+
+  return (
+    <div className="space-y-3">
+      {cattle.weightRecords.map((record) => {
+        const width = maxWeight > 0 ? (record.weightKg / maxWeight) * 100 : 0;
+
+        return (
+          <div key={record.id} className="grid gap-2 rounded-md border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">
+                  {formatDate(record.measuredAt)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Weight check
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm tabular-nums text-muted-foreground">
+                  {record.weightKg.toLocaleString("en", {
+                    maximumFractionDigits: 1,
+                  })}{" "}
+                  kg
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => onDelete(record.id)}
+                  disabled={deletingId === record.id}
+                >
+                  <Trash2 className="size-3.5" />
+                  <span className="sr-only">Delete weight record</span>
+                </Button>
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${width}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CattleDetailDrawer({
+  cattle,
+  children,
+}: {
+  cattle: CattleTableRow;
+  children: React.ReactNode;
+}) {
+  const isMobile = useIsMobile();
+  const router = useRouter();
+  const latestWeight = getLatestWeight(cattle);
+  const weightDelta = getWeightDelta(cattle);
+  const [measuredAt, setMeasuredAt] = React.useState(todayInputValue);
+  const [weightKg, setWeightKg] = React.useState("");
+  const [isSavingWeight, setIsSavingWeight] = React.useState(false);
+  const [deletingWeightId, setDeletingWeightId] = React.useState<string | null>(
+    null,
+  );
+
+  async function addWeightRecord(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSavingWeight(true);
+    const toastId = toast.loading("Adding weight record...");
+
+    try {
+      const response = await fetch(`/api/cattle/${cattle.id}/weight-records`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          measuredAt,
+          weightKg,
+        }),
+      });
+      const result = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (!response.ok) {
+        toast.error(result?.message ?? "Unable to add weight record", {
+          id: toastId,
+        });
+        return;
+      }
+
+      toast.success("Weight record added", { id: toastId });
+      setWeightKg("");
+      router.refresh();
+    } catch {
+      toast.error("Unable to add weight record", { id: toastId });
+    } finally {
+      setIsSavingWeight(false);
+    }
+  }
+
+  async function deleteWeightRecord(recordId: string) {
+    setDeletingWeightId(recordId);
+    const toastId = toast.loading("Deleting weight record...");
+
+    try {
+      const response = await fetch(`/api/weight-records/${recordId}`, {
+        method: "DELETE",
+      });
+      const result = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (!response.ok) {
+        toast.error(result?.message ?? "Unable to delete weight record", {
+          id: toastId,
+        });
+        return;
+      }
+
+      toast.success("Weight record deleted", { id: toastId });
+      router.refresh();
+    } catch {
+      toast.error("Unable to delete weight record", { id: toastId });
+    } finally {
+      setDeletingWeightId(null);
+    }
+  }
+
+  return (
+    <Drawer direction={isMobile ? "bottom" : "right"}>
+      <DrawerTrigger asChild>
+        <Button
+          variant="link"
+          className="h-auto min-w-0 cursor-pointer px-0 text-left font-medium underline underline-offset-4 hover:text-primary"
+        >
+          <span className="truncate">{children}</span>
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent className="sm:max-w-2xl">
+        <DrawerHeader className="px-5 pt-5 pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid min-w-0 gap-1">
+              <DrawerTitle className="text-xl">
+                {cattle.name || "Unnamed cattle"}
+              </DrawerTitle>
+              <DrawerDescription className="break-words">
+                {cattle.identificationNumber} · {cattle.breed}
+              </DrawerDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={statusVariant(cattle.currentStatus)}>
+                {displayEnum(cattle.currentStatus)}
+              </Badge>
+              <Badge variant={healthVariant(cattle.healthStatus)}>
+                {displayEnum(cattle.healthStatus)}
+              </Badge>
+            </div>
+          </div>
+        </DrawerHeader>
+
+        <div className="grid gap-4 overflow-y-auto px-5 pb-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <CattleDetailMetric
+              icon={<CalendarDays className="size-4" />}
+              label="Age"
+              value={getAge(cattle.dateOfBirth)}
+              detail={formatDate(cattle.dateOfBirth)}
+            />
+            <CattleDetailMetric
+              icon={<HeartPulse className="size-4" />}
+              label="Health"
+              value={displayEnum(cattle.healthStatus)}
+              detail={`Status: ${displayEnum(cattle.currentStatus)}`}
+            />
+            <CattleDetailMetric
+              icon={<Scale className="size-4" />}
+              label="Latest Weight"
+              value={
+                latestWeight
+                  ? `${latestWeight.weightKg.toLocaleString("en", {
+                      maximumFractionDigits: 1,
+                    })} kg`
+                  : "Not recorded"
+              }
+              detail={
+                latestWeight
+                  ? `Measured ${formatDate(latestWeight.measuredAt)}`
+                  : "Add a weight record to track growth"
+              }
+            />
+            <CattleDetailMetric
+              icon={<Weight className="size-4" />}
+              label="Weight Change"
+              value={
+                weightDelta === null
+                  ? "No trend"
+                  : `${weightDelta > 0 ? "+" : ""}${weightDelta.toLocaleString(
+                      "en",
+                      { maximumFractionDigits: 1 },
+                    )} kg`
+              }
+              detail={
+                cattle.weightRecords.length > 1
+                  ? "Compared with previous record"
+                  : "Needs at least two records"
+              }
+            />
+            <CattleDetailMetric
+              icon={<ClipboardList className="size-4" />}
+              label="Records"
+              value={`${cattle.weightRecords.length} weight ${
+                cattle.weightRecords.length === 1 ? "entry" : "entries"
+              }`}
+              detail={`Updated ${formatDate(cattle.updatedAt)}`}
+            />
+          </div>
+
+          <DetailSection
+            title="Profile"
+            description="Core registration details for this animal."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DetailField label="Gender" value={displayEnum(cattle.gender)} />
+              <DetailField
+                label="Purpose"
+                value={displayEnum(cattle.purpose)}
+              />
+              <DetailField
+                label="Color"
+                value={
+                  <span className="inline-flex items-center gap-2">
+                    <Palette className="size-4 text-muted-foreground" />
+                    {cattle.color || "Not set"}
+                  </span>
+                }
+              />
+              <DetailField label="Breed" value={cattle.breed} />
+              <DetailField
+                label="Registered"
+                value={formatDate(cattle.createdAt)}
+              />
+              <DetailField
+                label="Last Updated"
+                value={formatDate(cattle.updatedAt)}
+              />
+            </div>
+          </DetailSection>
+
+          <DetailSection
+            title="Notes"
+            description="Handling, care, or farm observations saved with this record."
+          >
+            {cattle.notes?.trim() ? (
+              <div className="rounded-md bg-muted/40 p-3 text-sm leading-6 text-foreground">
+                {cattle.notes.trim()}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                No notes recorded yet.
+              </div>
+            )}
+          </DetailSection>
+
+          <DetailSection
+            title="Weight History"
+            description={`${cattle.weightRecords.length} record${
+              cattle.weightRecords.length === 1 ? "" : "s"
+            } saved for this animal.`}
+          >
+            <form
+              onSubmit={addWeightRecord}
+              className="grid gap-3 rounded-md bg-muted/30 p-3 sm:grid-cols-[1fr_1fr_auto]"
+            >
+              <div className="grid gap-1.5">
+                <Label htmlFor={`${cattle.id}-weight-date`}>Date</Label>
+                <Input
+                  id={`${cattle.id}-weight-date`}
+                  type="date"
+                  value={measuredAt}
+                  onChange={(event) => setMeasuredAt(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor={`${cattle.id}-weight-kg`}>Weight kg</Label>
+                <Input
+                  id={`${cattle.id}-weight-kg`}
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={weightKg}
+                  onChange={(event) => setWeightKg(event.target.value)}
+                  placeholder="420.5"
+                  required
+                />
+              </div>
+              <div className="flex items-end">
+                <Button
+                  type="submit"
+                  className="w-full sm:w-auto"
+                  disabled={isSavingWeight}
+                >
+                  <Plus className="size-4" />
+                  {isSavingWeight ? "Adding..." : "Add"}
+                </Button>
+              </div>
+            </form>
+
+            <WeightHistory
+              cattle={cattle}
+              onDelete={(recordId) => void deleteWeightRecord(recordId)}
+              deletingId={deletingWeightId}
+            />
+          </DetailSection>
+        </div>
+
+        <DrawerFooter className="px-5 pt-3">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <DrawerClose asChild>
+              <Button variant="outline">Close</Button>
+            </DrawerClose>
+            <FormDialog
+              type="edit"
+              id={cattle.id}
+              triggerLabel="Edit Record"
+              defaultValues={{
+                identificationNumber: cattle.identificationNumber,
+                name: cattle.name ?? "",
+                breed: cattle.breed,
+                gender: cattle.gender,
+                purpose: cattle.purpose,
+                dateOfBirth: cattle.dateOfBirth.slice(0, 10),
+                currentStatus: cattle.currentStatus,
+                healthStatus: cattle.healthStatus,
+                notes: cattle.notes ?? "",
+                color: cattle.color ?? "",
+              }}
+            />
+          </div>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function ActionsCell({ cattle }: { cattle: CattleTableRow }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  async function deleteCattle() {
+    setIsDeleting(true);
+    const toastId = toast.loading("Deleting cattle record...");
+
+    try {
+      const response = await fetch(`/api/cattle/${cattle.id}`, {
+        method: "DELETE",
+      });
+      const result = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (!response.ok) {
+        toast.error(result?.message ?? "Unable to delete cattle record", {
+          id: toastId,
+        });
+        return;
+      }
+
+      toast.success("Cattle record deleted", { id: toastId });
+      setOpen(false);
+      router.refresh();
+    } catch {
+      toast.error("Unable to delete cattle record", { id: toastId });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <div className="flex justify-end gap-2">
+      <FormDialog
+        type="edit"
+        id={cattle.id}
+        triggerLabel="Edit"
+        defaultValues={{
+          identificationNumber: cattle.identificationNumber,
+          name: cattle.name ?? "",
+          breed: cattle.breed,
+          gender: cattle.gender,
+          purpose: cattle.purpose,
+          dateOfBirth: cattle.dateOfBirth.slice(0, 10),
+          currentStatus: cattle.currentStatus,
+          healthStatus: cattle.healthStatus,
+          notes: cattle.notes ?? "",
+          color: cattle.color ?? "",
+        }}
+      />
+
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Trash2 className="mr-2 size-4" />
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete cattle record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove{" "}
+              {cattle.name || cattle.identificationNumber} from your herd
+              records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteCattle();
+              }}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+const columns: ColumnDef<CattleTableRow>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -111,7 +739,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label={`Select ${row.original.identificationNumber}`}
         />
       </div>
     ),
@@ -119,352 +747,259 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "header",
-    header: "Header",
-    cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />;
-    },
+    accessorKey: "identificationNumber",
+    header: "ID Number",
+    cell: ({ row }) => (
+      <div className="min-w-28">
+        <CattleDetailDrawer cattle={row.original}>
+          {row.original.identificationNumber}
+        </CattleDetailDrawer>
+      </div>
+    ),
     enableHiding: false,
   },
   {
-    accessorKey: "type",
-    header: "Section Type",
+    accessorKey: "name",
+    header: "Name",
     cell: ({ row }) => (
-      <div className="w-32">
-        <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {row.original.type}
-        </Badge>
+      <div className="min-w-32">
+        <CattleDetailDrawer cattle={row.original}>
+          {row.original.name || "Unnamed"}
+        </CattleDetailDrawer>
       </div>
     ),
   },
   {
-    accessorKey: "status",
+    accessorKey: "breed",
+    header: "Breed",
+    cell: ({ row }) => <div className="min-w-28">{row.original.breed}</div>,
+  },
+  {
+    accessorKey: "gender",
+    header: "Gender",
+    cell: ({ row }) => (
+      <Badge variant="outline">{displayEnum(row.original.gender)}</Badge>
+    ),
+  },
+  {
+    accessorKey: "purpose",
+    header: "Purpose",
+    cell: ({ row }) => (
+      <Badge variant="outline">{displayEnum(row.original.purpose)}</Badge>
+    ),
+  },
+  {
+    accessorKey: "dateOfBirth",
+    header: "Birth Date",
+    cell: ({ row }) => (
+      <div className="min-w-32">
+        <div>{formatDate(row.original.dateOfBirth)}</div>
+        <div className="text-xs text-muted-foreground">
+          {getAge(row.original.dateOfBirth)}
+        </div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "currentStatus",
     header: "Status",
     cell: ({ row }) => (
-      <Badge variant="outline" className="px-1.5 text-muted-foreground">
-        {row.original.status === "Done" ? (
-          <CircleCheck className="text-green-500 dark:text-green-400" />
-        ) : (
-          <Loader />
-        )}
-        {row.original.status}
+      <Badge variant={statusVariant(row.original.currentStatus)}>
+        {displayEnum(row.original.currentStatus)}
       </Badge>
     ),
   },
   {
-    accessorKey: "target",
-    header: () => <div className="w-full text-right">Target</div>,
+    accessorKey: "healthStatus",
+    header: "Health",
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          });
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
+      <Badge variant={healthVariant(row.original.healthStatus)}>
+        {displayEnum(row.original.healthStatus)}
+      </Badge>
     ),
   },
   {
-    accessorKey: "limit",
-    header: () => <div className="w-full text-right">Limit</div>,
+    accessorKey: "color",
+    header: "Color",
     cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: "Done",
-            error: "Error",
-          });
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
+      <div className="min-w-28">
+        {row.original.color || (
+          <span className="text-muted-foreground">Not set</span>
+        )}
+      </div>
     ),
-  },
-  {
-    accessorKey: "reviewer",
-    header: "Reviewer",
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== "Assign reviewer";
-
-      if (isAssigned) {
-        return row.original.reviewer;
-      }
-
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
-          </Label>
-          <Select>
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
-            >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-              <SelectItem value="Jamik Tashpulatov">
-                Jamik Tashpulatov
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </>
-      );
-    },
   },
   {
     id: "actions",
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
-            size="icon"
-          >
-            <MoreVertical />
-            <span className="sr-only">Open menu</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+    header: () => <div className="text-right">Actions</div>,
+    cell: ({ row }) => <ActionsCell cattle={row.original} />,
+    enableSorting: false,
+    enableHiding: false,
   },
 ];
 
-export function DataTable({
-  data: initialData,
-}: {
-  data: z.infer<typeof schema>[];
-}) {
+export function DataTable({ data }: { data: CattleTableRow[] }) {
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    [],
-  );
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: "identificationNumber", desc: false },
+  ]);
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   });
 
   const table = useReactTable({
-    data: initialData,
+    data,
     columns,
     state: {
       sorting,
       columnVisibility,
       rowSelection,
-      columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId: (row) => row.id,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
   });
 
   return (
-    <Tabs
-      defaultValue="outline"
-      className="w-full flex-col justify-start gap-6"
-    >
-      <div className="flex items-center justify-between px-4 lg:px-6">
-        <Label htmlFor="view-selector" className="sr-only">
-          View
-        </Label>
-        <Select defaultValue="outline">
-          <SelectTrigger
-            className="flex w-fit @4xl/main:hidden"
-            size="sm"
-            id="view-selector"
-          >
-            <SelectValue placeholder="Select a view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="outline">Outline</SelectItem>
-            <SelectItem value="past-performance">Past Performance</SelectItem>
-            <SelectItem value="key-personnel">Key Personnel</SelectItem>
-            <SelectItem value="focus-documents">Focus Documents</SelectItem>
-          </SelectContent>
-        </Select>
-        <TabsList className="hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:px-1 @4xl/main:flex">
-          <TabsTrigger value="outline">Outline</TabsTrigger>
-          <TabsTrigger value="past-performance">
-            Past Performance <Badge variant="secondary">3</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
-        </TabsList>
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Columns3 />
-                <span className="hidden lg:inline">Customize Columns</span>
-                <span className="lg:hidden">Columns</span>
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {table
-                .getAllColumns()
-                .filter(
-                  (column) =>
-                    typeof column.accessorFn !== "undefined" &&
-                    column.getCanHide(),
-                )
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted-foreground">
+          Showing {table.getFilteredRowModel().rows.length} cattle record
+          {table.getFilteredRowModel().rows.length === 1 ? "" : "s"}.
         </div>
-      </div>
-      <TabsContent
-        value="outline"
-        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
-      >
-        <div className="overflow-hidden rounded-md border">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-muted">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    return (
-                      <TableHead key={header.id} colSpan={header.colSpan}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+              <Columns3 />
+              Columns
+              <ChevronDown />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {table
+              .getAllColumns()
+              .filter(
+                (column) =>
+                  typeof column.accessorFn !== "undefined" &&
+                  column.getCanHide(),
+              )
+              .map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                >
+                  {columnLabels[column.id] ?? column.id}
+                </DropdownMenuCheckboxItem>
               ))}
-            </TableHeader>
-            <TableBody className="**:data-[slot=table-cell]:first:w-8">
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="overflow-hidden rounded-md border">
+        <Table>
+          <TableHeader className="bg-muted">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} colSpan={header.colSpan}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
                         )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    No results.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        <div className="flex items-center justify-between px-4">
-          <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
-          </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => {
-                  table.setPageSize(Number(value));
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  {[10, 20, 30, 40, 50].map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody className="**:data-[slot=table-cell]:first:w-8">
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="p-0">
+                  <AppState
+                    type="empty"
+                    title="No cattle records found"
+                    description="Create your first cattle record to start tracking herd details, health, and weight history."
+                    action={{
+                      label: "Create Cattle",
+                      href: "/cattle?create=true",
+                    }}
+                    className="min-h-80 border-0"
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted-foreground">
+          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length} selected.
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="rows-per-page" className="text-sm font-medium">
+              Rows
+            </Label>
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => table.setPageSize(Number(value))}
+            >
+              <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 40, 50].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-medium">
               Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
+              {table.getPageCount() || 1}
             </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
+                className="hidden size-8 p-0 sm:flex"
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
@@ -493,7 +1028,7 @@ export function DataTable({
               </Button>
               <Button
                 variant="outline"
-                className="hidden size-8 lg:flex"
+                className="hidden size-8 sm:flex"
                 size="icon"
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                 disabled={!table.getCanNextPage()}
@@ -504,201 +1039,7 @@ export function DataTable({
             </div>
           </div>
         </div>
-      </TabsContent>
-      <TabsContent
-        value="past-performance"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-md border border-dashed"></div>
-      </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-md border border-dashed"></div>
-      </TabsContent>
-      <TabsContent
-        value="focus-documents"
-        className="flex flex-col px-4 lg:px-6"
-      >
-        <div className="aspect-video w-full flex-1 rounded-md border border-dashed"></div>
-      </TabsContent>
-    </Tabs>
-  );
-}
-
-const chartData = [
-  { month: "January", desktop: 186, mobile: 80 },
-  { month: "February", desktop: 305, mobile: 200 },
-  { month: "March", desktop: 237, mobile: 120 },
-  { month: "April", desktop: 73, mobile: 190 },
-  { month: "May", desktop: 209, mobile: 130 },
-  { month: "June", desktop: 214, mobile: 140 },
-];
-
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
-  },
-} satisfies ChartConfig;
-
-function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
-  const isMobile = useIsMobile();
-
-  return (
-    <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger asChild>
-        <Button variant="link" className="w-fit px-0 text-left text-foreground">
-          {item.header}
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.header}</DrawerTitle>
-          <DrawerDescription>
-            Showing total visitors for the last 6 months
-          </DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          {!isMobile && (
-            <>
-              <ChartContainer config={chartConfig}>
-                <AreaChart
-                  accessibilityLayer
-                  data={chartData}
-                  margin={{
-                    left: 0,
-                    right: 10,
-                  }}
-                >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    tickFormatter={(value) => value.slice(0, 3)}
-                    hide
-                  />
-                  <ChartTooltip
-                    cursor={false}
-                    content={<ChartTooltipContent indicator="dot" />}
-                  />
-                  <Area
-                    dataKey="mobile"
-                    type="natural"
-                    fill="var(--color-mobile)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-mobile)"
-                    stackId="a"
-                  />
-                  <Area
-                    dataKey="desktop"
-                    type="natural"
-                    fill="var(--color-desktop)"
-                    fillOpacity={0.4}
-                    stroke="var(--color-desktop)"
-                    stackId="a"
-                  />
-                </AreaChart>
-              </ChartContainer>
-              <Separator />
-              <div className="grid gap-2">
-                <div className="flex gap-2 leading-none font-medium">
-                  Trending up by 5.2% this month{" "}
-                  <TrendingUp className="size-4" />
-                </div>
-                <div className="text-muted-foreground">
-                  Showing total visitors for the last 6 months. This is just
-                  some random text to test the layout. It spans multiple lines
-                  and should wrap around.
-                </div>
-              </div>
-              <Separator />
-            </>
-          )}
-          <form className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
-              <Input id="header" defaultValue={item.header} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
-                <Select defaultValue={item.type}>
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Table of Contents">
-                      Table of Contents
-                    </SelectItem>
-                    <SelectItem value="Executive Summary">
-                      Executive Summary
-                    </SelectItem>
-                    <SelectItem value="Technical Approach">
-                      Technical Approach
-                    </SelectItem>
-                    <SelectItem value="Design">Design</SelectItem>
-                    <SelectItem value="Capabilities">Capabilities</SelectItem>
-                    <SelectItem value="Focus Documents">
-                      Focus Documents
-                    </SelectItem>
-                    <SelectItem value="Narrative">Narrative</SelectItem>
-                    <SelectItem value="Cover Page">Cover Page</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select defaultValue={item.status}>
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Done">Done</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Not Started">Not Started</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
-                <Input id="target" defaultValue={item.target} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
-                <Input id="limit" defaultValue={item.limit} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="reviewer">Reviewer</Label>
-              <Select defaultValue={item.reviewer}>
-                <SelectTrigger id="reviewer" className="w-full">
-                  <SelectValue placeholder="Select a reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                  <SelectItem value="Jamik Tashpulatov">
-                    Jamik Tashpulatov
-                  </SelectItem>
-                  <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </form>
-        </div>
-        <DrawerFooter>
-          <Button>Submit</Button>
-          <DrawerClose asChild>
-            <Button variant="outline">Done</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
+      </div>
+    </div>
   );
 }
