@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CattleStatus {
+  Active
+  Sold
+  Deceased
+  Transferred
+}
+
+enum HealthStatus {
+  Healthy
+  Sick
+  Recovering
+  NeedsCheckup
+}
+
+enum Purpose {
+  Breeding
+  Dairy
+  Meat
+}
+
+enum Gender {
+  Male
+  Female
+}
+
+model Cattle {
+  id                   String       @id @default(cuid())
+  identificationNumber String       @unique
+  name                 String?
+  breed                String
+  gender               Gender
+  purpose              Purpose
+  dateOfBirth          DateTime
+  currentStatus        CattleStatus @default(Active)
+  healthStatus         HealthStatus @default(Healthy)
+
+  notes         String?
+  color         String?
+  weightRecords WeightRecord[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([breed])
+  @@index([gender])
+  @@index([purpose])
+  @@index([currentStatus])
+  @@index([healthStatus])
+  @@index([dateOfBirth])
+}
+
+model WeightRecord {
+  id         String   @id @default(cuid())
+  cattleId   String
+  cattle     Cattle   @relation(fields: [cattleId], references: [id], onDelete: Cascade)
+  measuredAt DateTime @default(now())
+  weightKg   Float
+
+  @@index([cattleId, measuredAt])
+}
