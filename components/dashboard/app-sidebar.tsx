@@ -2,19 +2,9 @@
 
 import * as React from "react";
 import {
-  Bot,
-  Camera,
-  ChartBar,
-  CircleHelp,
-  Database,
-  FileChartColumnIncreasing,
-  FileText,
-  FileType,
-  Folder,
   LayoutDashboard,
   List,
   PanelTop,
-  Search,
   Settings,
   Users,
 } from "lucide-react";

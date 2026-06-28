@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,6 +7,9 @@ import { AppSidebar } from "@/components/dashboard/app-sidebar";
 
 import { SiteHeader } from "@/components/dashboard/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +40,7 @@ export default function RootLayout({
         geistSans.variable,
         geistMono.variable,
         "font-sans",
+        inter.variable,
       )}
     >
       <body className="min-h-full flex flex-col">
@@ -55,6 +59,7 @@ export default function RootLayout({
               <main>{children}</main>
             </SidebarInset>
           </SidebarProvider>
+          <Toaster richColors closeButton />
         </TooltipProvider>
       </body>
     </html>

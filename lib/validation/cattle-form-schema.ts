@@ -29,7 +29,7 @@ export const cattleFormSchema = z.object({
     .string()
     .trim()
     .min(4, {
-      message: "Identification number must be at least 4 characters long",
+      message: "Identification is required",
     })
     .max(50, {
       message: "Identification number must be at most 50 characters long",
