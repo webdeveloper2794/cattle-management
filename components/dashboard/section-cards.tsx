@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, ClipboardList, HeartPulse, Weight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,91 +10,103 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export function SectionCards() {
+export type DashboardStats = {
+  totalCattle: number;
+  activeCattle: number;
+  healthAlerts: number;
+  meatCattle: number;
+  dairyCattle: number;
+  breedingCattle: number;
+  weightRecords: number;
+};
+
+export function SectionCards({ stats }: { stats: DashboardStats }) {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Total Revenue</CardDescription>
+          <CardDescription>Total Cattle</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            $1,250.00
+            {stats.totalCattle}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp />
-              +12.5%
+              <ClipboardList />
+              Herd
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Trending up this month <TrendingUp className="size-4" />
+          <div className="line-clamp-1 font-medium">Complete herd records</div>
+          <div className="text-muted-foreground">
+            {stats.meatCattle} meat · {stats.dairyCattle} dairy ·{" "}
+            {stats.breedingCattle} breeding
+          </div>
+        </CardFooter>
+      </Card>
+
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Active Cattle</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {stats.activeCattle}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <Activity />
+              Active
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 font-medium">Currently in the herd</div>
+          <div className="text-muted-foreground">
+            Excludes sold, deceased, and transferred cattle
+          </div>
+        </CardFooter>
+      </Card>
+
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Health Alerts</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {stats.healthAlerts}
+          </CardTitle>
+          <CardAction>
+            <Badge variant={stats.healthAlerts > 0 ? "destructive" : "outline"}>
+              <HeartPulse />
+              Review
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 font-medium">
+            Sick or needs checkup records
           </div>
           <div className="text-muted-foreground">
-            Visitors for the last 6 months
+            Useful for daily care prioritization
           </div>
         </CardFooter>
       </Card>
+
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>New Customers</CardDescription>
+          <CardDescription>Weight Records</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            1,234
+            {stats.weightRecords}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingDown />
-              -20%
+              <Weight />
+              Tracking
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <TrendingDown className="size-4" />
-          </div>
+          <div className="line-clamp-1 font-medium">Growth history captured</div>
           <div className="text-muted-foreground">
-            Acquisition needs attention
+            Especially important for meat cattle
           </div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader>
-          <CardDescription>Active Accounts</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            45,678
-          </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
-              <TrendingUp />
-              +12.5%
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Strong user retention <TrendingUp className="size-4" />
-          </div>
-          <div className="text-muted-foreground">Engagement exceed targets</div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader>
-          <CardDescription>Growth Rate</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            4.5%
-          </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
-              <TrendingUp />
-              +4.5%
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Steady performance increase <TrendingUp className="size-4" />
-          </div>
-          <div className="text-muted-foreground">Meets growth projections</div>
         </CardFooter>
       </Card>
     </div>
