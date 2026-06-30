@@ -10,14 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-export type CattleFilterValues = {
-  q: string;
-  gender: string;
-  purpose: string;
-  status: string;
-  health: string;
-};
+import { CattleFilterValues } from "@/types";
 
 type FormFilterProps = {
   filters: CattleFilterValues;
@@ -65,9 +58,10 @@ function FilterSelect({
 
 export function FormFilter({ filters }: FormFilterProps) {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const filterKey = Object.values(filters).join("|");
 
   return (
-    <Card>
+    <Card key={filterKey}>
       <CardHeader>
         <CardTitle>Filters</CardTitle>
         <CardDescription>
