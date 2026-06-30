@@ -9,16 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-export type DashboardStats = {
-  totalCattle: number;
-  activeCattle: number;
-  healthAlerts: number;
-  meatCattle: number;
-  dairyCattle: number;
-  breedingCattle: number;
-  weightRecords: number;
-};
+import { type DashboardStats } from "@/types";
 
 export function SectionCards({ stats }: { stats: DashboardStats }) {
   return (
@@ -103,7 +94,9 @@ export function SectionCards({ stats }: { stats: DashboardStats }) {
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 font-medium">Growth history captured</div>
+          <div className="line-clamp-1 font-medium">
+            Growth history captured
+          </div>
           <div className="text-muted-foreground">
             Especially important for meat cattle
           </div>
@@ -112,3 +105,4 @@ export function SectionCards({ stats }: { stats: DashboardStats }) {
     </div>
   );
 }
+export { DashboardStats };

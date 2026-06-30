@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
 import {
   Card,
@@ -15,30 +15,24 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import type { PurposeChartPoint, WeightActivityPoint } from "@/types";
 
-export type WeightActivityPoint = {
-  month: string;
-  records: number;
-};
+export type { PurposeChartPoint, WeightActivityPoint };
 
 const chartConfig = {
-  records: {
-    label: "Weight records",
+  count: {
+    label: "Cattle",
     color: "var(--primary)",
   },
 } satisfies ChartConfig;
 
-export function ChartAreaInteractive({
-  data,
-}: {
-  data: WeightActivityPoint[];
-}) {
+export function PurposeChart({ data }: { data: PurposeChartPoint[] }) {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Weight Activity</CardTitle>
+        <CardTitle>Cattle by Purpose</CardTitle>
         <CardDescription>
-          Weight records captured across recent months
+          Herd composition across dairy, meat, and breeding cattle
         </CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
@@ -46,41 +40,40 @@ export function ChartAreaInteractive({
           config={chartConfig}
           className="aspect-auto h-[250px] w-full"
         >
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id="fillRecords" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-records)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-records)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
+          <BarChart data={data} accessibilityLayer>
             <CartesianGrid vertical={false} />
             <XAxis
-              dataKey="month"
+              dataKey="purpose"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
             />
+            <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
             <ChartTooltip
               cursor={false}
               content={<ChartTooltipContent indicator="dot" />}
             />
-            <Area
-              dataKey="records"
-              type="natural"
-              fill="url(#fillRecords)"
-              stroke="var(--color-records)"
+            <Bar
+              dataKey="count"
+              fill="var(--color-count)"
+              radius={[4, 4, 0, 0]}
             />
-          </AreaChart>
+          </BarChart>
         </ChartContainer>
       </CardContent>
     </Card>
   );
+}
+
+export function ChartAreaInteractive({
+  data,
+}: {
+  data: WeightActivityPoint[];
+}) {
+  const purposeData = data.map((point) => ({
+    purpose: point.month,
+    count: point.records,
+  }));
+
+  return <PurposeChart data={purposeData} />;
 }
