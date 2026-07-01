@@ -255,7 +255,7 @@ export function CattleDetailDrawer({
             description="Handling, care, or farm observations saved with this record."
           >
             {cattle.notes?.trim() ? (
-              <div className="rounded-md bg-muted/40 p-3 text-sm leading-6 text-foreground">
+              <div className="max-h-48 max-w-full overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
                 {cattle.notes.trim()}
               </div>
             ) : (

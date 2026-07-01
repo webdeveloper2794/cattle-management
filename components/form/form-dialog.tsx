@@ -34,24 +34,66 @@ export function FormDialog({
   triggerLabel,
 }: CattleFormDialogProps) {
   const [open, setOpen] = React.useState(false);
+  const selectMenuOpenRef = React.useRef(false);
+  const selectMenuCloseTimeoutRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const router = useRouter();
 
   const isCreate = type === "create";
   const closeDialog = () => setOpen(false);
 
-  function keepSelectMenusOpen(event: Event) {
+  React.useEffect(() => {
+    return () => {
+      if (selectMenuCloseTimeoutRef.current) {
+        clearTimeout(selectMenuCloseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function handleSelectOpenChange(isOpen: boolean) {
+    if (selectMenuCloseTimeoutRef.current) {
+      clearTimeout(selectMenuCloseTimeoutRef.current);
+      selectMenuCloseTimeoutRef.current = null;
+    }
+
+    if (isOpen) {
+      selectMenuOpenRef.current = true;
+      return;
+    }
+
+    selectMenuCloseTimeoutRef.current = setTimeout(() => {
+      selectMenuOpenRef.current = false;
+      selectMenuCloseTimeoutRef.current = null;
+    }, 200);
+  }
+
+  function handleDialogOpenChange(isOpen: boolean) {
+    if (!isOpen && selectMenuOpenRef.current) {
+      return;
+    }
+
+    setOpen(isOpen);
+  }
+
+  function keepDialogOpenWhileSelectIsOpen(event: Event) {
     const target = event.target;
+    const openSelectContent = document.querySelector(
+      "[data-slot='select-content'][data-state='open']",
+    );
 
     if (
-      target instanceof HTMLElement &&
-      target.closest("[data-slot='select-content']")
+      selectMenuOpenRef.current ||
+      openSelectContent ||
+      (target instanceof HTMLElement &&
+        target.closest("[data-slot='select-content']"))
     ) {
       event.preventDefault();
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
         <Button variant={isCreate ? "default" : "outline"} size="lg">
           {isCreate ? (
@@ -66,8 +108,8 @@ export function FormDialog({
 
       <DialogContent
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl md:max-w-3xl"
-        onPointerDownOutside={keepSelectMenusOpen}
-        onInteractOutside={keepSelectMenusOpen}
+        onPointerDownOutside={keepDialogOpenWhileSelectIsOpen}
+        onInteractOutside={keepDialogOpenWhileSelectIsOpen}
       >
         <DialogHeader>
           <DialogTitle>
@@ -89,6 +131,7 @@ export function FormDialog({
             router.refresh();
           }}
           onCancel={closeDialog}
+          onSelectOpenChange={handleSelectOpenChange}
         />
       </DialogContent>
     </Dialog>

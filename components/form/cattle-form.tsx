@@ -34,6 +34,7 @@ type CattleFormProps = {
   defaultValues?: Partial<CattleFormValues>;
   onSuccess?: () => void;
   onCancel?: () => void;
+  onSelectOpenChange?: (open: boolean) => void;
 };
 
 const fallbackDefaultValues: CattleFormValues = {
@@ -76,6 +77,7 @@ export function CattleForm({
   defaultValues,
   onSuccess,
   onCancel,
+  onSelectOpenChange,
 }: CattleFormProps) {
   const formId = React.useId();
 
@@ -232,7 +234,11 @@ export function CattleForm({
                 <FieldLabel>
                   <RequiredLabel>Gender</RequiredLabel>
                 </FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  onOpenChange={onSelectOpenChange}
+                >
                   <SelectTrigger
                     className="w-full"
                     aria-invalid={fieldState.invalid}
@@ -259,7 +265,11 @@ export function CattleForm({
                 <FieldLabel>
                   <RequiredLabel>Purpose</RequiredLabel>
                 </FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  onOpenChange={onSelectOpenChange}
+                >
                   <SelectTrigger
                     className="w-full"
                     aria-invalid={fieldState.invalid}
@@ -308,7 +318,11 @@ export function CattleForm({
                 <FieldLabel>
                   <RequiredLabel>Current Status</RequiredLabel>
                 </FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  onOpenChange={onSelectOpenChange}
+                >
                   <SelectTrigger
                     className="w-full"
                     aria-invalid={fieldState.invalid}
@@ -337,7 +351,11 @@ export function CattleForm({
                 <FieldLabel>
                   <RequiredLabel>Health Status</RequiredLabel>
                 </FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  onOpenChange={onSelectOpenChange}
+                >
                   <SelectTrigger
                     className="w-full"
                     aria-invalid={fieldState.invalid}
