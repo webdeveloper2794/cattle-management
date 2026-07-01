@@ -31,15 +31,15 @@ export const cattleFormSchema = z.object({
     .min(4, {
       message: "Identification is required",
     })
-    .max(50, {
-      message: "Identification number must be at most 50 characters long",
+    .max(20, {
+      message: "Identification number must be at most 20 characters long",
     }),
 
   name: z
     .string()
     .trim()
-    .max(20, {
-      message: "Name must be at most 20 characters long",
+    .max(15, {
+      message: "Name must be at most 15 characters long",
     })
     .optional()
     .or(z.literal("")),
@@ -50,8 +50,8 @@ export const cattleFormSchema = z.object({
     .min(2, {
       message: "Breed is required",
     })
-    .max(20, {
-      message: "Breed must not be more than 20 characters long",
+    .max(15, {
+      message: "Breed must not be more than 15 characters long",
     }),
 
   gender: genderSchema,
@@ -69,8 +69,8 @@ export const cattleFormSchema = z.object({
   notes: z
     .string()
     .trim()
-    .max(500, {
-      message: "Notes must be at most 500 characters long",
+    .max(300, {
+      message: "Notes must be at most 300 characters long",
     })
     .optional()
     .or(z.literal("")),
@@ -78,8 +78,8 @@ export const cattleFormSchema = z.object({
   color: z
     .string()
     .trim()
-    .max(30, {
-      message: "Color must be at most 30 characters long",
+    .max(25, {
+      message: "Color must be at most 25 characters long",
     })
     .optional()
     .or(z.literal("")),
